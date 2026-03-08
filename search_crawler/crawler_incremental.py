@@ -27,20 +27,26 @@ from .config import CRAWL_CONFIG, DELAY_CONFIG
 from .models import DatabaseManager, CommentHistory, NoteHistory, CrawlLog
 from .cookie_pool_manager import CookiePoolManager
 from .email_notifier import EmailNotifier, EmailNotifierMock
+from .config import COOKIE_POOL
 
 
 class IncrementalCommentSpider:
     """增量评论采集爬虫"""
     
-    def __init__(self, db_url, email_config=None, use_mock_email=False):
+    def __init__(self, db_url, email_config=None, use_mock_email=False, auto_sync_cookies=True):
         """
         :param db_url: 数据库连接URL
         :param email_config: 邮件配置（可选）
         :param use_mock_email: 是否使用邮件模拟器（测试用）
+        :param auto_sync_cookies: 是否自动同步 config.py 中的 Cookie 到数据库
         """
         # 注意：需先手动执行 SQL 初始化脚本创建表
         self.db_manager = DatabaseManager(db_url)
         self.cookie_manager = CookiePoolManager(self.db_manager)
+        
+        # 自动同步 config.py 中的 Cookie 到数据库
+        if auto_sync_cookies:
+            self._sync_cookies_from_config()
         
         # 初始化邮件通知器
         if email_config:
@@ -53,6 +59,17 @@ class IncrementalCommentSpider:
         
         # 初始化小红书API
         self.xhs_apis = XHS_Apis()
+    
+    def _sync_cookies_from_config(self):
+        """从 config.py 同步 Cookie 到数据库"""
+        for cookie_info in COOKIE_POOL:
+            cookie_value = cookie_info.get('value', '').strip()
+            if cookie_value:
+                self.cookie_manager.add_cookie(
+                    cookie_info['name'],
+                    cookie_value,
+                    cookie_info.get('account_info', '')
+                )
     
     def generate_comment_unique_id(self, comment):
         """生成评论唯一标识"""
