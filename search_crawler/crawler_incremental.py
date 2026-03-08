@@ -74,7 +74,8 @@ class IncrementalCommentSpider:
     def generate_comment_unique_id(self, comment):
         """生成评论唯一标识"""
         note_id = comment.get('note_id', '')
-        comment_id = comment.get('comment_id', '')
+        # API返回的是'id'，数据库字段是'comment_id'
+        comment_id = comment.get('comment_id') or comment.get('id', '')
         user_id = comment.get('user_id', '')
         content = comment.get('content', '')[:50]
         upload_time = comment.get('upload_time', '')
@@ -110,16 +111,24 @@ class IncrementalCommentSpider:
         
         comment_objects = []
         for comment in comments:
+            # 处理字段映射：API返回的是'id'，数据库字段是'comment_id'
+            comment_id = comment.get('comment_id') or comment.get('id', '')
+            
+            # 处理 upload_time，空字符串转为 None
+            upload_time = comment.get('upload_time')
+            if not upload_time or upload_time == '':
+                upload_time = None
+            
             ch = CommentHistory(
                 unique_id=comment.get('_unique_id'),
                 note_id=comment.get('note_id'),
-                comment_id=comment.get('comment_id'),
+                comment_id=comment_id,
                 parent_comment_id=comment.get('parent_comment_id'),
                 user_id=comment.get('user_id'),
                 nickname=comment.get('nickname'),
                 content=comment.get('content'),
                 like_count=comment.get('like_count', 0),
-                upload_time=comment.get('upload_time'),
+                upload_time=upload_time,
                 ip_location=comment.get('ip_location')
             )
             comment_objects.append(ch)
@@ -130,6 +139,11 @@ class IncrementalCommentSpider:
     def save_note_history(self, session, notes):
         """保存笔记历史记录（存在则更新）"""
         for note in notes:
+            # 处理 upload_time，空字符串转为 None
+            upload_time = note.get('upload_time')
+            if not upload_time or upload_time == '':
+                upload_time = None
+            
             existing = session.query(NoteHistory).filter_by(
                 note_id=note.get('note_id')
             ).first()
@@ -142,6 +156,7 @@ class IncrementalCommentSpider:
                 existing.collected_count = note.get('collected_count', 0)
                 existing.comment_count = note.get('comment_count', 0)
                 existing.share_count = note.get('share_count', 0)
+                existing.upload_time = upload_time
             else:
                 new_note = NoteHistory(
                     note_id=note.get('note_id'),
@@ -154,7 +169,7 @@ class IncrementalCommentSpider:
                     collected_count=note.get('collected_count', 0),
                     comment_count=note.get('comment_count', 0),
                     share_count=note.get('share_count', 0),
-                    upload_time=note.get('upload_time')
+                    upload_time=upload_time  # 使用处理后的值
                 )
                 session.add(new_note)
     
@@ -288,6 +303,9 @@ class IncrementalCommentSpider:
                             comment['note_author'] = note.get('user', {}).get('nickname', '未知作者')
                             comment['note_author_id'] = note.get('user', {}).get('user_id', '')
                             comment['note_upload_time'] = note.get('time', '')
+                            # 确保 comment_id 字段存在（API返回的是'id'）
+                            if 'comment_id' not in comment and 'id' in comment:
+                                comment['comment_id'] = comment['id']
                         
                         all_new_comments.extend(new_comments)
                         
@@ -304,8 +322,15 @@ class IncrementalCommentSpider:
                 self.random_delay(*DELAY_CONFIG['page_interval'])
             
             # 5. 保存笔记历史
+            from xhs_utils.data_util import timestamp_to_str
+            
             notes_for_save = []
             for note in all_notes:
+                # 处理 upload_time，空字符串转为 None
+                upload_time = note.get('time')
+                if not upload_time or upload_time == '':
+                    upload_time = None
+                
                 notes_for_save.append({
                     'note_id': note.get('id'),
                     'note_url': f"https://www.xiaohongshu.com/explore/{note.get('id')}",
@@ -317,7 +342,7 @@ class IncrementalCommentSpider:
                     'collected_count': note.get('collects', 0),
                     'comment_count': note.get('comments', 0),
                     'share_count': note.get('shares', 0),
-                    'upload_time': note.get('time', '')
+                    'upload_time': upload_time
                 })
             
             self.save_note_history(session, notes_for_save)
@@ -335,7 +360,7 @@ class IncrementalCommentSpider:
             
             # 7. 发送邮件通知
             if self.email_notifier and all_new_comments:
-                unique_users = len(set(c['user_id'] for c in all_new_comments))
+                unique_users = len(set(c.get('user_id', '') for c in all_new_comments))
                 
                 crawl_result = {
                     'keyword': keyword,
