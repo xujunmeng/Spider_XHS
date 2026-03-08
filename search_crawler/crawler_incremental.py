@@ -204,15 +204,33 @@ class IncrementalCommentSpider:
             logger.error(f"获取评论异常: {e}")
             return []
     
+    def _get_cookie_for_request(self, cookies_str=''):
+        """获取用于请求的 Cookie，优先使用 CookiePoolManager"""
+        # 如果传入了有效的 cookies_str，直接使用
+        if cookies_str and len(cookies_str) > 10:
+            return cookies_str
+        
+        # 否则从 CookiePoolManager 获取
+        cookie_name, cookie_value = self.cookie_manager.get_available_cookie()
+        if cookie_value:
+            logger.info(f"使用 CookiePool 中的 cookie: {cookie_name}")
+            return cookie_value
+        
+        logger.warning("没有可用的 Cookie，请检查配置")
+        return ''
+    
     def run_incremental_crawl(self, keyword=None, max_pages=None, cookies_str=''):
         """
         执行增量采集
         :param keyword: 搜索关键词（默认使用配置）
         :param max_pages: 最大采集页数（默认使用配置）
-        :param cookies_str: Cookie字符串
+        :param cookies_str: Cookie字符串（可选，不传则从 CookiePool 获取）
         """
         keyword = keyword or CRAWL_CONFIG['keyword']
         max_pages = max_pages or CRAWL_CONFIG['max_pages']
+        
+        # 获取 Cookie（优先使用传入的，否则从 CookiePool 获取）
+        effective_cookies = self._get_cookie_for_request(cookies_str)
         
         task_id = datetime.now().strftime('%Y%m%d_%H%M%S')
         today = datetime.now().strftime('%Y-%m-%d')
@@ -235,7 +253,7 @@ class IncrementalCommentSpider:
             for page in range(1, max_pages + 1):
                 logger.info(f"正在搜索第 {page} 页...")
                 
-                notes = self.search_notes(keyword, page, CRAWL_CONFIG['sort_type'], cookies_str)
+                notes = self.search_notes(keyword, page, CRAWL_CONFIG['sort_type'], effective_cookies)
                 
                 if not notes:
                     logger.info(f"第 {page} 页无数据，停止搜索")
@@ -253,7 +271,7 @@ class IncrementalCommentSpider:
                     logger.info(f"正在获取笔记评论: {note_id}")
                     
                     # 获取评论
-                    comments = self.get_all_comments(note_url, cookies_str)
+                    comments = self.get_all_comments(note_url, effective_cookies)
                     total_comments += len(comments)
                     
                     logger.info(f"笔记 {note_id} 共有 {len(comments)} 条评论")
