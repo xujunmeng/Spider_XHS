@@ -5,7 +5,7 @@
 # 数据库配置（SQLAlchemy格式）
 # 请根据实际情况修改数据库连接信息
 DB_CONFIG = {
-    'url': 'mysql+pymysql://root:your_password@localhost:3306/xhs_crawler?charset=utf8mb4',
+    'url': 'mysql+pymysql://root:12345678@localhost:3306/xhs_crawler?charset=utf8mb4',
     'pool_size': 5,
     'max_overflow': 10,
     'pool_recycle': 3600
@@ -14,7 +14,7 @@ DB_CONFIG = {
 # 爬虫配置
 CRAWL_CONFIG = {
     'keyword': '51talk老带新',           # 搜索关键词
-    'max_pages': 5,                     # 每次执行最多采集页数
+    'max_pages': 10,                     # 每次执行最多采集页数
     'sort_type': 1,                     # 1=最新优先
     'page_size': 20,                    # 每页数量
     'schedule_interval': 3600,          # 定时间隔(秒)，默认1小时

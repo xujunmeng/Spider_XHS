@@ -7,7 +7,7 @@ import time
 from datetime import datetime
 from sqlalchemy import func
 from loguru import logger
-from models import DatabaseManager, CookiePool, CookieUsageLog
+from .models import DatabaseManager, CookiePool, CookieUsageLog
 
 
 class CookiePoolManager:

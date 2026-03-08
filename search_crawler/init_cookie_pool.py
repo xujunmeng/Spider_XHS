@@ -7,11 +7,11 @@
 import sys
 import os
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from config import DB_CONFIG, COOKIE_POOL
-from models import DatabaseManager
-from cookie_pool_manager import CookiePoolManager
+from .config import DB_CONFIG, COOKIE_POOL
+from .models import DatabaseManager
+from .cookie_pool_manager import CookiePoolManager
 
 
 def init_cookie_pool():

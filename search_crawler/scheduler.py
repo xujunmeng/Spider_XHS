@@ -8,14 +8,14 @@ import os
 import time
 import signal
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from loguru import logger
 
-from config import DB_CONFIG, EMAIL_CONFIG, CRAWL_CONFIG
-from crawler_incremental import IncrementalCommentSpider
+from .config import DB_CONFIG, EMAIL_CONFIG, CRAWL_CONFIG
+from .crawler_incremental import IncrementalCommentSpider
 
 
 class CrawlerScheduler:

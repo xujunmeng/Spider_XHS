@@ -12,7 +12,7 @@ from datetime import datetime
 from collections import defaultdict
 
 # 添加项目根目录到路径
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from loguru import logger
 from sqlalchemy import func
@@ -22,11 +22,11 @@ from apis.xhs_pc_apis import XHS_Apis
 from xhs_utils.data_util import save_to_xlsx
 from xhs_utils.common_util import init
 
-# 导入新模块
-from config import CRAWL_CONFIG, DELAY_CONFIG
-from models import DatabaseManager, CommentHistory, NoteHistory, CrawlLog
-from cookie_pool_manager import CookiePoolManager
-from email_notifier import EmailNotifier, EmailNotifierMock
+# 导入本包模块
+from .config import CRAWL_CONFIG, DELAY_CONFIG
+from .models import DatabaseManager, CommentHistory, NoteHistory, CrawlLog
+from .cookie_pool_manager import CookiePoolManager
+from .email_notifier import EmailNotifier, EmailNotifierMock
 
 
 class IncrementalCommentSpider:
