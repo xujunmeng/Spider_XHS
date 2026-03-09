@@ -14,7 +14,7 @@ DB_CONFIG = {
 # 爬虫配置
 CRAWL_CONFIG = {
     'keyword': '51talk老带新',           # 搜索关键词
-    'max_pages': 1,                     # 每次执行最多采集页数
+    'max_pages': 5,                     # 每次执行最多采集页数
     'sort_type': 1,                     # 1=最新优先
     'page_size': 20,                    # 每页数量
     'schedule_interval': 3600,          # 定时间隔(秒)，默认1小时
@@ -22,9 +22,9 @@ CRAWL_CONFIG = {
 
 # 延迟配置（防反爬）
 DELAY_CONFIG = {
-    'page_interval': (10, 20),            # 页间延迟(秒)
-    'note_interval': (20, 30),        # 笔记间延迟(秒)
-    'comment_interval': (10, 30)      # 评论分页延迟(秒)
+    'page_interval': (3, 5),            # 页间延迟(秒)
+    'note_interval': (3, 5),        # 笔记间延迟(秒)
+    'comment_interval': (3, 5)      # 评论分页延迟(秒)
 }
 
 # Cookie池配置
@@ -38,7 +38,7 @@ COOKIE_POOL_CONFIG = {
 COOKIE_POOL = [
     {
         'name': 'account_01',
-        'value': 'abRequestId=7e3310df-011a-5d42-943e-fb44df97212c; a1=19c94f738easkxvhhq9y1cv91oxe8lxj119x1sxe130000383551; webId=f769b9d526c8861d4325189df5578d03; gid=yjSj4iW4WdyYyjSj4iWqYyMCd0MTChxxAjvyjdyShjylCCq8dY1CVy888qYq22y88iDYY42j; webBuild=5.14.0; xsecappid=xhs-pc-web; acw_tc=0a0b14e217729805534593089e62368c57395c7eb892aa5b00da7c72b267a0; web_session=040069b5eb3bd0f905a224c6983b4b1e1b0702; id_token=VjEAACzddrembl6djDi9eotQPERmyp4DS1gRTbN6S0uJaHg6IJx4lchCxxmJYm4m37upyDoYOBGioCB3CLkXk22s1hdd0NEs66OG1rG8Okg2TPpjdbU7535isvjmkKrihe16pY9s; loadts=1772982152157; unread={%22ub%22:%226996e82e000000001d0113ff%22%2C%22ue%22:%2269aa8962000000002602cdb4%22%2C%22uc%22:13}; websectiga=634d3ad75ffb42a2ade2c5e1705a73c845837578aeb31ba0e442d75c648da36a; sec_poison_id=3582f653-28a0-4c9d-859b-59137b50693d',  # 请填写实际Cookie值
+        'value': 'abRequestId=7e3310df-011a-5d42-943e-fb44df97212c; a1=19c94f738easkxvhhq9y1cv91oxe8lxj119x1sxe130000383551; webId=f769b9d526c8861d4325189df5578d03; gid=yjSj4iW4WdyYyjSj4iWqYyMCd0MTChxxAjvyjdyShjylCCq8dY1CVy888qYq22y88iDYY42j; xsecappid=xhs-pc-web; acw_tc=0a0bb2e117730675925137951e334a11084cfa518399ddbae8391804e9efae; webBuild=5.14.2; loadts=1773068533826; websectiga=634d3ad75ffb42a2ade2c5e1705a73c845837578aeb31ba0e442d75c648da36a; sec_poison_id=6029c34b-9e17-413f-a280-46fb5f470f5b; web_session=040069b81245c5fe2197fda99b3b4bef557358; id_token=VjEAAIb2I6VkpNgTmRkeho0aiBA/8ML/PpqCf1+LFddF6trnXnqS9MxkQ9if/40HiG2hzdRYwg5p1tq85AmCw5BJI+979EHCDMTN3g+XGJVcBPp8i2bxsMzBCnwQPZr9fJIlZpX3; unread={%22ub%22:%2269a951c0000000001a01dedd%22%2C%22ue%22:%2269ae5d0a000000001503bbee%22%2C%22uc%22:29}',  # 请填写实际Cookie值
         'account_info': '主账号'
     },
     # {

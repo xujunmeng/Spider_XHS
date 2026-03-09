@@ -11,13 +11,20 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from search_crawler.crawler_incremental import IncrementalCommentSpider
 from search_crawler.config import DB_CONFIG, EMAIL_CONFIG, CRAWL_CONFIG
+from xhs_utils.common_util import init
 
 
 def main():
     """主入口"""
+    # ============================================
+    # ✅ 复用：调用 init() 获取 cookies_str 和 base_path
+    # ============================================
+    cookies_str, base_path = init()
+    
     # 创建爬虫实例（自动从 config.py 同步 cookies 到数据库）
     spider = IncrementalCommentSpider(
         db_url=DB_CONFIG['url'],
+        base_path=base_path,  # ✅ 复用：传入 base_path，用于Excel保存
         email_config=EMAIL_CONFIG if EMAIL_CONFIG.get('sender_email') else None,
         use_mock_email=False
     )

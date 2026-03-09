@@ -14,6 +14,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from loguru import logger
 
+from xhs_utils.common_util import init
 from .config import DB_CONFIG, EMAIL_CONFIG, CRAWL_CONFIG
 from .crawler_incremental import IncrementalCommentSpider
 
@@ -26,9 +27,16 @@ class CrawlerScheduler:
         self.spider = None
         self.running = False
         
+        # ============================================
+        # ✅ 复用：调用 init() 获取 cookies_str 和 base_path
+        # ============================================
+        cookies_str, base_path = init()
+        logger.info(f"Excel保存路径: {base_path['excel']}")
+        
         # 初始化爬虫
         self.spider = IncrementalCommentSpider(
             db_url=DB_CONFIG['url'],
+            base_path=base_path,  # ✅ 复用：传入 base_path，用于Excel保存
             email_config=EMAIL_CONFIG if EMAIL_CONFIG.get('sender_email') else None,
             use_mock_email=False
         )

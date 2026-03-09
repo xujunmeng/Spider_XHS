@@ -17,9 +17,15 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from loguru import logger
 from sqlalchemy import func
 
-# 导入项目已有模块
+# ============================================
+# ✅ 复用 1: 导入现有的API和数据处理工具
+# ============================================
 from apis.xhs_pc_apis import XHS_Apis
-from xhs_utils.data_util import save_to_xlsx
+from xhs_utils.data_util import (
+    handle_comment_info,    # ✅ 复用：评论数据处理
+    save_to_xlsx,           # ✅ 复用：Excel保存
+    timestamp_to_str        # ✅ 复用：时间戳转换
+)
 from xhs_utils.common_util import init
 
 # 导入本包模块
@@ -31,11 +37,20 @@ from .config import COOKIE_POOL
 
 
 class IncrementalCommentSpider:
-    """增量评论采集爬虫"""
+    """
+    增量评论采集爬虫 - 复用现有代码版本
     
-    def __init__(self, db_url, email_config=None, use_mock_email=False, auto_sync_cookies=True):
+    本类按照技术方案文档第四章的要求，复用项目中已有的成熟逻辑：
+    - 评论采集：复用 apis/xhs_pc_apis.py:get_note_all_comment()
+    - 评论处理：复用 xhs_utils/data_util.py:handle_comment_info()
+    - Excel保存：复用 xhs_utils/data_util.py:save_to_xlsx() + base_path
+    - 时间转换：复用 xhs_utils/data_util.py:timestamp_to_str()
+    """
+    
+    def __init__(self, db_url, base_path=None, email_config=None, use_mock_email=False, auto_sync_cookies=True):
         """
         :param db_url: 数据库连接URL
+        :param base_path: 基础路径字典，由 init() 返回，格式为 {'media': ..., 'excel': ...}
         :param email_config: 邮件配置（可选）
         :param use_mock_email: 是否使用邮件模拟器（测试用）
         :param auto_sync_cookies: 是否自动同步 config.py 中的 Cookie 到数据库
@@ -43,6 +58,11 @@ class IncrementalCommentSpider:
         # 注意：需先手动执行 SQL 初始化脚本创建表
         self.db_manager = DatabaseManager(db_url)
         self.cookie_manager = CookiePoolManager(self.db_manager)
+        
+        # ============================================
+        # ✅ 复用：保存 base_path，用于后续Excel保存
+        # ============================================
+        self.base_path = base_path
         
         # 自动同步 config.py 中的 Cookie 到数据库
         if auto_sync_cookies:
@@ -72,7 +92,11 @@ class IncrementalCommentSpider:
                 )
     
     def generate_comment_unique_id(self, comment):
-        """生成评论唯一标识"""
+        """
+        生成评论唯一标识（用于去重）
+        
+        使用: note_id + comment_id + user_id + content(前50字) + 时间戳
+        """
         note_id = comment.get('note_id', '')
         # API返回的是'id'，数据库字段是'comment_id'
         comment_id = comment.get('comment_id') or comment.get('id', '')
@@ -94,7 +118,13 @@ class IncrementalCommentSpider:
         return set(row[0] for row in results)
     
     def filter_new_comments(self, session, comments):
-        """过滤出新增的评论"""
+        """
+        过滤出新增的评论（增量采集核心逻辑）
+        
+        :param session: 数据库会话
+        :param comments: 采集到的所有评论列表（已由 handle_comment_info 处理）
+        :return: 新增的评论列表
+        """
         for comment in comments:
             comment['_unique_id'] = self.generate_comment_unique_id(comment)
         
@@ -105,30 +135,27 @@ class IncrementalCommentSpider:
         return new_comments
     
     def save_comment_history_batch(self, session, comments):
-        """批量保存评论历史记录"""
+        """
+        批量保存评论历史记录到MySQL
+        
+        注意：comment 字段已由 handle_comment_info() 标准化处理
+        """
         if not comments:
             return 0
         
         comment_objects = []
         for comment in comments:
-            # 处理字段映射：API返回的是'id'，数据库字段是'comment_id'
-            comment_id = comment.get('comment_id') or comment.get('id', '')
-            
-            # 处理 upload_time，空字符串转为 None
-            upload_time = comment.get('upload_time')
-            if not upload_time or upload_time == '':
-                upload_time = None
-            
+            # ✅ 字段已由 handle_comment_info() 标准化处理
             ch = CommentHistory(
                 unique_id=comment.get('_unique_id'),
                 note_id=comment.get('note_id'),
-                comment_id=comment_id,
+                comment_id=comment.get('comment_id'),  # ✅ handle_comment_info 已处理字段映射
                 parent_comment_id=comment.get('parent_comment_id'),
                 user_id=comment.get('user_id'),
                 nickname=comment.get('nickname'),
                 content=comment.get('content'),
                 like_count=comment.get('like_count', 0),
-                upload_time=upload_time,
+                upload_time=comment.get('upload_time'),
                 ip_location=comment.get('ip_location')
             )
             comment_objects.append(ch)
@@ -139,11 +166,6 @@ class IncrementalCommentSpider:
     def save_note_history(self, session, notes):
         """保存笔记历史记录（存在则更新）"""
         for note in notes:
-            # 处理 upload_time，空字符串转为 None
-            upload_time = note.get('upload_time')
-            if not upload_time or upload_time == '':
-                upload_time = None
-            
             existing = session.query(NoteHistory).filter_by(
                 note_id=note.get('note_id')
             ).first()
@@ -156,7 +178,7 @@ class IncrementalCommentSpider:
                 existing.collected_count = note.get('collected_count', 0)
                 existing.comment_count = note.get('comment_count', 0)
                 existing.share_count = note.get('share_count', 0)
-                existing.upload_time = upload_time
+                existing.upload_time = note.get('upload_time')
             else:
                 new_note = NoteHistory(
                     note_id=note.get('note_id'),
@@ -169,7 +191,7 @@ class IncrementalCommentSpider:
                     collected_count=note.get('collected_count', 0),
                     comment_count=note.get('comment_count', 0),
                     share_count=note.get('share_count', 0),
-                    upload_time=upload_time  # 使用处理后的值
+                    upload_time=note.get('upload_time')
                 )
                 session.add(new_note)
     
@@ -179,7 +201,15 @@ class IncrementalCommentSpider:
         time.sleep(delay)
     
     def search_notes(self, query, page, sort_type=1, cookies_str=''):
-        """搜索笔记"""
+        """
+        搜索笔记
+        
+        :param query: 搜索关键词
+        :param page: 页码
+        :param sort_type: 排序类型（1=最新优先）
+        :param cookies_str: Cookie字符串
+        :return: 笔记列表
+        """
         try:
             success, msg, res_json = self.xhs_apis.search_note(
                 query=query,
@@ -195,16 +225,50 @@ class IncrementalCommentSpider:
             items = res_json.get('data', {}).get('items', [])
             # 过滤只保留笔记类型
             notes = [item for item in items if item.get('model_type') == 'note']
+            
+            # ============================================
+            # 调试日志：打印第一条笔记的字段和数据结构
+            # ============================================
+            if notes and page == 1:  # 只在第一页打印，避免日志过多
+                first_note = notes[0]
+                note_card = first_note.get('note_card', {})
+                user_info = note_card.get('user', {})
+                logger.info("=" * 60)
+                logger.info("【调试】搜索API返回的第一条笔记数据结构：")
+                logger.info("=" * 60)
+                logger.info(f"笔记字段列表: {list(first_note.keys())}")
+                logger.info(f"笔记标题 (display_title): {note_card.get('display_title', '【无display_title】')}")
+                logger.info(f"用户昵称 (nick_name): {user_info.get('nick_name', '【无nick_name】')}")
+                logger.info(f"用户ID: {user_info.get('user_id', '【无user_id】')}")
+                logger.info("=" * 60)
+            
             return notes
             
         except Exception as e:
             logger.error(f"搜索笔记异常: {e}")
             return []
     
+    # ============================================
+    # ✅ 复用 2: 使用现有API和 handle_comment_info() 处理评论数据
+    # ============================================
     def get_all_comments(self, note_url, cookies_str=''):
-        """获取笔记的所有评论"""
+        """
+        获取笔记的所有评论（复用现有API和数据处理）
+        
+        复用逻辑：
+        1. 调用 apis/xhs_pc_apis.py 中的 get_note_all_comment() 获取原始数据
+        2. 调用 xhs_utils/data_util.py 中的 handle_comment_info() 标准化处理
+        
+        :param note_url: 笔记URL
+        :param cookies_str: Cookie字符串
+        :return: 处理后的评论列表
+        """
         try:
-            success, msg, comments = self.xhs_apis.get_note_all_comment(
+            # ✅ 复用：调用现有的 get_note_all_comment() API
+            # 该方法内部已实现：
+            # - 分页获取所有一级评论
+            # - 遍历每条一级评论，分页获取所有二级回复
+            success, msg, raw_comments = self.xhs_apis.get_note_all_comment(
                 url=note_url,
                 cookies_str=cookies_str
             )
@@ -213,7 +277,52 @@ class IncrementalCommentSpider:
                 logger.error(f"获取评论失败: {msg}")
                 return []
             
-            return comments if comments else []
+            if not raw_comments:
+                return []
+            
+            # ✅ 复用：使用 handle_comment_info() 处理每条评论（包括一级和二级）
+            processed_comments = []
+            for comment in raw_comments:
+                try:
+                    # ============================================
+                    # 处理一级评论
+                    # ============================================
+                    comment['note_url'] = note_url
+                    processed = handle_comment_info(comment)
+                    processed['parent_comment_id'] = ''
+                    processed['comment_level'] = 1
+                    processed['is_top'] = comment.get('is_top', False)  # 置顶标记
+                    processed_comments.append(processed)
+                    
+                    # ============================================
+                    # ✅ 修复：处理二级评论（sub_comments）
+                    # ============================================
+                    sub_comments = comment.get('sub_comments', [])
+                    if sub_comments:
+                        logger.debug(f"一级评论 {comment.get('id')} 有 {len(sub_comments)} 条二级评论")
+                        for sub_comment in sub_comments:
+                            try:
+                                sub_comment['note_url'] = note_url
+                                sub_processed = handle_comment_info(sub_comment)
+                                
+                                # 二级评论特有字段
+                                sub_processed['parent_comment_id'] = comment.get('id')  # 父评论ID
+                                sub_processed['comment_level'] = 2
+                                sub_processed['reply_to_nickname'] = comment.get('user_info', {}).get('nickname', '')  # 回复给哪位用户
+                                
+                                processed_comments.append(sub_processed)
+                            except Exception as sub_e:
+                                logger.warning(f"处理二级评论数据失败: {sub_e}")
+                                continue
+                except Exception as e:
+                    logger.warning(f"处理评论数据失败: {e}")
+                    continue
+            
+            # 统计一级和二级评论数量
+            level1_count = sum(1 for c in processed_comments if c['comment_level'] == 1)
+            level2_count = sum(1 for c in processed_comments if c['comment_level'] == 2)
+            logger.info(f"笔记评论处理完成: 一级 {level1_count} 条, 二级 {level2_count} 条, 总计 {len(processed_comments)} 条")
+            return processed_comments
             
         except Exception as e:
             logger.error(f"获取评论异常: {e}")
@@ -237,9 +346,17 @@ class IncrementalCommentSpider:
     def run_incremental_crawl(self, keyword=None, max_pages=None, cookies_str=''):
         """
         执行增量采集
+        
+        主流程：
+        1. 分页搜索笔记
+        2. 对每条笔记调用 get_all_comments()（复用现有API）
+        3. 过滤新增评论（去重）
+        4. 保存到MySQL和Excel
+        
         :param keyword: 搜索关键词（默认使用配置）
         :param max_pages: 最大采集页数（默认使用配置）
         :param cookies_str: Cookie字符串（可选，不传则从 CookiePool 获取）
+        :return: (笔记列表, 新增评论列表)
         """
         keyword = keyword or CRAWL_CONFIG['keyword']
         max_pages = max_pages or CRAWL_CONFIG['max_pages']
@@ -296,14 +413,34 @@ class IncrementalCommentSpider:
                     
                     if new_comments:
                         # 关联笔记信息
+                        # ============================================
+                        # ✅ 修复：使用正确的字段路径
+                        # 笔记数据在 note_card 下，标题是 display_title，用户是 user.nick_name
+                        # ============================================
+                        note_card = note.get('note_card', {})
+                        user_info = note_card.get('user', {})
+                        
+                        # 获取笔记标题（display_title 可能为空）
+                        note_title = note_card.get('display_title', '')
+                        if not note_title:
+                            note_title = '无标题'
+                        
+                        # 获取作者昵称（nick_name 或 nickname）
+                        note_author = user_info.get('nick_name') or user_info.get('nickname', '未知作者')
+                        note_author_id = user_info.get('user_id', '')
+                        
+                        # 获取笔记时间（从 corner_tag_info 或 time 字段）
+                        corner_tag = note_card.get('corner_tag_info', [{}])[0] if note_card.get('corner_tag_info') else {}
+                        note_time_display = corner_tag.get('text', '')  # 如 "5天前"
+                        
                         for comment in new_comments:
                             comment['note_id'] = note_id
                             comment['note_url'] = note_url
-                            comment['note_title'] = note.get('title', '无标题')
-                            comment['note_author'] = note.get('user', {}).get('nickname', '未知作者')
-                            comment['note_author_id'] = note.get('user', {}).get('user_id', '')
-                            comment['note_upload_time'] = note.get('time', '')
-                            # 确保 comment_id 字段存在（API返回的是'id'）
+                            comment['note_title'] = note_title
+                            comment['note_author'] = note_author
+                            comment['note_author_id'] = note_author_id
+                            comment['note_upload_time'] = note_time_display
+                            # 确保 comment_id 字段存在
                             if 'comment_id' not in comment and 'id' in comment:
                                 comment['comment_id'] = comment['id']
                         
@@ -322,27 +459,41 @@ class IncrementalCommentSpider:
                 self.random_delay(*DELAY_CONFIG['page_interval'])
             
             # 5. 保存笔记历史
-            from xhs_utils.data_util import timestamp_to_str
-            
             notes_for_save = []
             for note in all_notes:
-                # 处理 upload_time，空字符串转为 None
-                upload_time = note.get('time')
-                if not upload_time or upload_time == '':
-                    upload_time = None
+                # ============================================
+                # ✅ 修复：使用正确的字段路径（note_card 下的字段）
+                # ============================================
+                note_card = note.get('note_card', {})
+                user_info = note_card.get('user', {})
+                interact_info = note_card.get('interact_info', {})
+                
+                # 获取笔记标题
+                note_title = note_card.get('display_title', '')
+                if not note_title:
+                    note_title = '无标题'
+                
+                # 获取作者信息
+                note_author = user_info.get('nick_name') or user_info.get('nickname', '未知作者')
+                
+                # 获取互动数据（转换为整数）
+                liked_count = int(interact_info.get('liked_count', 0)) if interact_info.get('liked_count') else 0
+                collected_count = int(interact_info.get('collected_count', 0)) if interact_info.get('collected_count') else 0
+                comment_count = int(interact_info.get('comment_count', 0)) if interact_info.get('comment_count') else 0
+                share_count = int(interact_info.get('shared_count', 0)) if interact_info.get('shared_count') else 0
                 
                 notes_for_save.append({
                     'note_id': note.get('id'),
                     'note_url': f"https://www.xiaohongshu.com/explore/{note.get('id')}",
-                    'title': note.get('title', '无标题'),
-                    'user_id': note.get('user', {}).get('user_id', ''),
-                    'nickname': note.get('user', {}).get('nickname', '未知作者'),
-                    'note_type': '视频' if note.get('type') == 'video' else '图集',
-                    'liked_count': note.get('likes', 0),
-                    'collected_count': note.get('collects', 0),
-                    'comment_count': note.get('comments', 0),
-                    'share_count': note.get('shares', 0),
-                    'upload_time': upload_time
+                    'title': note_title,
+                    'user_id': user_info.get('user_id', ''),
+                    'nickname': note_author,
+                    'note_type': '视频' if note_card.get('type') == 'video' else '图集',
+                    'liked_count': liked_count,
+                    'collected_count': collected_count,
+                    'comment_count': comment_count,
+                    'share_count': share_count,
+                    'upload_time': None  # 搜索API返回的是相对时间，如"5天前"
                 })
             
             self.save_note_history(session, notes_for_save)
@@ -350,13 +501,16 @@ class IncrementalCommentSpider:
             
             # 6. 保存到Excel（可选）
             if all_new_comments:
-                output_dir = 'output'
-                os.makedirs(output_dir, exist_ok=True)
+                # ============================================
+                # ✅ 复用：使用 base_path['excel'] 保存Excel
+                # 与 main.py 中保存Excel的方式保持一致
+                # ============================================
+                excel_name = f'{keyword}_{today}_comments'
+                file_path = os.path.abspath(os.path.join(self.base_path['excel'], f'{excel_name}.xlsx'))
                 
-                # 保存评论
-                comment_file = f'{output_dir}/{keyword}_{today}_comments.xlsx'
-                save_to_xlsx(all_new_comments, comment_file, type='comment')
-                logger.info(f"评论已保存到: {comment_file}")
+                # ✅ 复用：使用现有的 save_to_xlsx() 保存评论
+                save_to_xlsx(all_new_comments, file_path, type='comment')
+                logger.info(f"评论已保存到: {file_path}")
             
             # 7. 发送邮件通知
             if self.email_notifier and all_new_comments:
@@ -403,12 +557,18 @@ def main():
     """主入口"""
     from config import DB_CONFIG, EMAIL_CONFIG
     
-    # 初始化
+    # ============================================
+    # ✅ 复用：调用 init() 获取 cookies_str 和 base_path
+    # 与 main.py 中的使用方式保持一致
+    # ============================================
     cookies_str, base_path = init()
+    
+    logger.info(f"Excel保存路径: {base_path['excel']}")
     
     # 创建爬虫实例
     spider = IncrementalCommentSpider(
         db_url=DB_CONFIG['url'],
+        base_path=base_path,  # ✅ 复用：传入 base_path，用于Excel保存
         email_config=EMAIL_CONFIG if EMAIL_CONFIG.get('sender_email') else None,
         use_mock_email=False  # 设为True使用模拟邮件（测试用）
     )
