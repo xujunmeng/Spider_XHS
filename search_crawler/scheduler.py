@@ -15,15 +15,25 @@ from apscheduler.triggers.cron import CronTrigger
 from loguru import logger
 
 from xhs_utils.common_util import init
-from .config import DB_CONFIG, EMAIL_CONFIG, CRAWL_CONFIG
-from .crawler_incremental import IncrementalCommentSpider
+from search_crawler.config import DB_CONFIG, EMAIL_CONFIG, CRAWL_CONFIG
+from search_crawler.crawler_incremental import IncrementalCommentSpider
 
 
 class CrawlerScheduler:
     """爬虫定时调度器"""
     
     def __init__(self):
-        self.scheduler = BackgroundScheduler()
+        # 从配置读取调度参数
+        from apscheduler.executors.pool import ThreadPoolExecutor
+        executors = {
+            'default': ThreadPoolExecutor(max_workers=CRAWL_CONFIG.get('thread_pool_workers', 10))
+        }
+        job_defaults = {
+            'coalesce': CRAWL_CONFIG.get('coalesce', True),
+            'max_instances': CRAWL_CONFIG.get('max_instances', 1),
+            'misfire_grace_time': CRAWL_CONFIG.get('misfire_grace_time', 3600)
+        }
+        self.scheduler = BackgroundScheduler(executors=executors, job_defaults=job_defaults)
         self.spider = None
         self.running = False
         
@@ -82,16 +92,24 @@ class CrawlerScheduler:
         logger.info("启动定时任务调度器...")
         logger.info(f"采集关键词: {CRAWL_CONFIG['keyword']}")
         logger.info(f"采集页数: {CRAWL_CONFIG['max_pages']}")
-        logger.info("定时规则: 每小时执行一次")
         
-        # 添加定时任务（每小时的第0分钟执行）
-        trigger = CronTrigger(minute='0')
+        # 计算并显示调度规则
+        interval_hours = CRAWL_CONFIG.get('schedule_interval', 3600) / 3600
+        cron_minute = CRAWL_CONFIG.get('schedule_cron', '0')
+        logger.info(f"定时规则: 每{interval_hours:.0f}小时执行一次 (cron: {cron_minute}分) ")
+        logger.info(f"容错配置: misfire_grace_time={CRAWL_CONFIG.get('misfire_grace_time', 3600)}s, coalesce={CRAWL_CONFIG.get('coalesce', True)}")
+        
+        # 添加定时任务（根据配置的cron表达式，默认每小时的第0分钟执行）
+        trigger = CronTrigger(minute=CRAWL_CONFIG.get('schedule_cron', '0'))
         
         self.scheduler.add_job(
             self.run_crawl_job,
             trigger=trigger,
             id='crawler_hourly_job',
-            replace_existing=True
+            replace_existing=True,
+            max_instances=CRAWL_CONFIG.get('max_instances', 1),
+            coalesce=CRAWL_CONFIG.get('coalesce', True),
+            misfire_grace_time=CRAWL_CONFIG.get('misfire_grace_time', 3600)
         )
         
         self.scheduler.start()
