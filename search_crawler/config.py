@@ -20,10 +20,10 @@ CRAWL_CONFIG = {
     
     # 定时调度配置（统一在此配置）
     'schedule_interval': 600,          # 定时间隔(秒)，默认1小时=3600秒
-    'schedule_cron': '0',               # Cron表达式（分钟位），默认每小时的第0分钟执行
+    'schedule_cron': '*/10',            # Cron表达式（分钟位），*/10表示每10分钟执行一次
     
     # APScheduler 容错配置（统一从CRAWL_CONFIG读取）
-    'misfire_grace_time': 3600,         # 任务错过执行时间后，多少秒内仍可补执行（默认1小时）
+    'misfire_grace_time': 600,         # 任务错过执行时间后，多少秒内仍可补执行（默认1小时）
     'coalesce': True,                   # 合并错过的多次任务，只执行一次（避免堆积）
     'max_instances': 1,                 # 同一时间只允许一个任务实例运行（防止并发冲突）
     'thread_pool_workers': 10,          # 线程池工作线程数

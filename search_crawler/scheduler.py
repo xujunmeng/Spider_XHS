@@ -12,6 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 from loguru import logger
 
 from xhs_utils.common_util import init
@@ -94,13 +95,21 @@ class CrawlerScheduler:
         logger.info(f"采集页数: {CRAWL_CONFIG['max_pages']}")
         
         # 计算并显示调度规则
-        interval_hours = CRAWL_CONFIG.get('schedule_interval', 3600) / 3600
-        cron_minute = CRAWL_CONFIG.get('schedule_cron', '0')
-        logger.info(f"定时规则: 每{interval_hours:.0f}小时执行一次 (cron: {cron_minute}分) ")
-        logger.info(f"容错配置: misfire_grace_time={CRAWL_CONFIG.get('misfire_grace_time', 3600)}s, coalesce={CRAWL_CONFIG.get('coalesce', True)}")
+        interval_seconds = CRAWL_CONFIG.get('schedule_interval', 3600)
+        interval_minutes = interval_seconds / 60
         
-        # 添加定时任务（根据配置的cron表达式，默认每小时的第0分钟执行）
-        trigger = CronTrigger(minute=CRAWL_CONFIG.get('schedule_cron', '0'))
+        # 根据间隔选择合适的触发器
+        if interval_seconds < 3600:
+            # 小于1小时，使用 IntervalTrigger（固定间隔）
+            trigger = IntervalTrigger(seconds=interval_seconds)
+            logger.info(f"定时规则: 每{interval_minutes:.0f}分钟执行一次 (固定间隔)")
+        else:
+            # 1小时及以上，使用 CronTrigger（整点执行）
+            cron_minute = CRAWL_CONFIG.get('schedule_cron', '0')
+            trigger = CronTrigger(minute=cron_minute)
+            logger.info(f"定时规则: 每{interval_minutes/60:.0f}小时执行一次 (cron: {cron_minute}分)")
+        
+        logger.info(f"容错配置: misfire_grace_time={CRAWL_CONFIG.get('misfire_grace_time', 3600)}s, coalesce={CRAWL_CONFIG.get('coalesce', True)}")
         
         self.scheduler.add_job(
             self.run_crawl_job,
