@@ -1,0 +1,27 @@
+[Unit]
+Description=Xiaohongshu Crawler Service
+After=network.target mysql.service
+
+[Service]
+Type=simple
+User=your-username
+WorkingDirectory=/Users/xujunmeng/Downloads/github/Spider_XHS
+Environment="PYTHONPATH=/Users/xujunmeng/Downloads/github/Spider_XHS"
+Environment="ENV=production"
+
+# 使用虚拟环境的 Python
+ExecStart=/Users/xujunmeng/Downloads/github/Spider_XHS/.venv/bin/python -m search_crawler.scheduler
+
+# 重启策略
+Restart=always
+RestartSec=10
+
+# 日志输出
+StandardOutput=append:/Users/xujunmeng/Downloads/github/Spider_XHS/logs/scheduler.log
+StandardError=append:/Users/xujunmeng/Downloads/github/Spider_XHS/logs/scheduler_error.log
+
+# 资源限制（可选）
+MemoryMax=512M
+
+[Install]
+WantedBy=multi-user.target
