@@ -4,6 +4,10 @@ loguru
 python-dotenv
 retry
 openpyxl
+aiohttp
+opencv-python
+numpy
+qrcode
 SQLAlchemy
 pymysql
 apscheduler
